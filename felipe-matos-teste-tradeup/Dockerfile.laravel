@@ -1,0 +1,39 @@
+# Imagem base com PHP 8.2 e Apache
+FROM php:8.2-apache
+
+# Instalar dependências PHP e extensões necessárias
+RUN apt-get update && apt-get install -y \
+    libzip-dev unzip git curl \
+    && docker-php-ext-install pdo pdo_mysql zip \
+    && a2enmod rewrite
+
+# Copiar o Composer para dentro da imagem
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Definir o diretório de trabalho para a aplicação Laravel
+WORKDIR /var/www/html
+
+# Copiar todos os arquivos do projeto para o contêiner
+COPY . /var/www/html
+
+# Ajustar permissões para as pastas de cache e armazenamento do Laravel
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Copiar o arquivo .env.example para .env
+RUN cp .env.example .env
+
+# Instalar as dependências do Composer com limite de memória desabilitado
+RUN COMPOSER_MEMORY_LIMIT=-1 composer install --no-interaction --optimize-autoloader --no-dev
+
+# Gerar a chave de aplicação Laravel
+RUN php artisan key:generate
+
+# Alterar o documento root do Apache para a pasta 'public'
+RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+
+# Expor a porta 8000 para a aplicação
+EXPOSE 8000
+
+# Iniciar o Apache no contêiner
+CMD ["apache2-foreground"]
